@@ -1,0 +1,13 @@
+FROM ghcr.io/zephyrproject-rtos/zephyr-build:latest
+
+USER root
+WORKDIR /workspace
+
+RUN touch /etc/bash.bashrc && chmod 644 /etc/bash.bashrc && \
+    echo "alias ll='ls -la --color=auto'" >> /etc/bash.bashrc
+
+# COPY scripts/entrypoint-dev.sh /entrypoint.sh
+# RUN chmod +x /entrypoint.sh
+
+# ENTRYPOINT ["/entrypoint.sh"]
+CMD ["/bin/bash"]

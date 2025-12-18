@@ -1,0 +1,10 @@
+services:
+  zephyr-app-template:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: zephyr-app-template
+    volumes:
+      - .:/workspace
+    stdin_open: true
+    tty: true
