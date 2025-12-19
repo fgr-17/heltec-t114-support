@@ -1,0 +1,8 @@
+board:
+  name: heltec_t114
+  full_name: Heltec T114
+  vendor: others
+  socs:
+  - name: nrf52840
+    variants:
+    - name: uf2

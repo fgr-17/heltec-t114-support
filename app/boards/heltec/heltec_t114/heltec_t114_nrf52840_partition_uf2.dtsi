@@ -1,0 +1,46 @@
+/*
+ * Zephyr Flash Layout mimicking Heltec Arduino configuration
+ * Base Address: 0x2000 (Aligned with uf2conv.py default)
+ */
+
+ / {
+    chosen {
+        zephyr,sram = &sram0;
+        zephyr,flash = &flash0;
+        /* Matches the 'appstartaddr' from uf2conv.py */
+        zephyr,code-partition = &code_partition;
+    };
+};
+
+&flash0 {
+    partitions {
+        compatible = "fixed-partitions";
+        #address-cells = <1>;
+        #size-cells = <1>;
+
+        /* 0x00000 to 0x02000: MBR (8KB) */
+        mbr_partition: partition@0 {
+            label = "mbr";
+            reg = <0x00000000 0x00002000>;
+            read-only;
+        };
+
+        /* 0x02000: This is where Arduino/uf2conv places your code */
+        code_partition: partition@2000 {
+            label = "code_partition";
+            reg = <0x00002000 0x000F2000>; /* ~968KB */
+        };
+
+        /* Remaining space for Storage and Bootloader */
+        storage_partition: partition@f4000 {
+            label = "storage";
+            reg = <0x000f4000 0x00008000>;
+        };
+
+        boot_partition: partition@fc000 {
+            label = "bootloader";
+            reg = <0x000fc000 0x00004000>;
+            read-only;
+        };
+    };
+};
