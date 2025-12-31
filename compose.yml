@@ -1,9 +1,9 @@
 services:
-  zephyr-app-template:
+  zephyr-t114:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: zephyr-app-template
+    container_name: zephyr-t114
     volumes:
       - .:/workspace
     stdin_open: true
