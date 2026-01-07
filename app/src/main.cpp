@@ -10,17 +10,20 @@
 
 static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
 
+#define LED_BLINKING_PERIOD_MS 2000
+
 int main(void)
 {
+    // Just blink LED - no USB, no serial, minimal code
     if (!device_is_ready(led.port)) {
         return 1;
     }
-
+    
     gpio_pin_configure_dt(&led, GPIO_OUTPUT);
 
     while (1) {
         gpio_pin_toggle_dt(&led);
-        k_msleep(500);  // Blink every 500ms
+        k_msleep(LED_BLINKING_PERIOD_MS);  // Fast blink so it's obvious
     }
 
     return 0;
