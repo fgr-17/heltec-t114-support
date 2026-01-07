@@ -30,6 +30,17 @@
 		};
 	};
 
+	buttons {
+		compatible = "gpio-keys";
+	
+		button0: button_0 {
+			gpios = <&gpio1 10 GPIO_ACTIVE_HIGH>;
+			label = "Button 0";
+			zephyr,code = <INPUT_KEY_0>;
+			// debounce-interval-ms = <50>;
+		};
+	};
+
 	// pwmleds {
 	// 	compatible = "pwm-leds";
 
@@ -43,6 +54,7 @@
 		led0 = &led0;
 		// pwm-led0 = &red_pwm_led;
 		// red-pwm-led = &red_pwm_led;
+		button0 = &button0;
 		mcuboot-led0 = &led0;
 		// spi = &spi2;
 		watchdog0 = &wdt0;
