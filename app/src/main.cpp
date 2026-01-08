@@ -3,8 +3,11 @@
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/led_strip.h>
-#include <zephyr/drivers/uart.h>  // Add this for UART/USB serial
-#include <zephyr/logging/log.h>  // Replace stdio.h with logging header
+#include <zephyr/drivers/uart.h>
+#include <zephyr/drivers/adc.h>
+#include <zephyr/logging/log.h>
+#include <hal/nrf_saadc.h>
+
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_DBG);
 
@@ -28,10 +31,37 @@ LOG_MODULE_REGISTER(main, LOG_LEVEL_DBG);
 #error "Unsupported board: VEXT_NODE device tree alias is not defined"
 #endif
 
+#define ADC_CONTROL_NODE DT_ALIAS(adc_control)
+#if !DT_NODE_HAS_STATUS(ADC_CONTROL_NODE, okay)
+#error "Unsupported board: ADC_CONTROL_NODE device tree alias is not defined"
+#endif
+
 static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED4_NODE, gpios);
 static const struct gpio_dt_spec button = GPIO_DT_SPEC_GET(BUTTON0_NODE, gpios);
-static const struct device *strip;
 static const struct gpio_dt_spec vext_ctl = GPIO_DT_SPEC_GET(VEXT_CONTROL_NODE, gpios);
+static const struct gpio_dt_spec adc_ctl = GPIO_DT_SPEC_GET(ADC_CONTROL_NODE, gpios);
+
+static const struct device *strip;
+static const struct device *adc_dev;
+
+static int16_t sample_buffer[1];
+static const struct adc_sequence sequence = {
+    .channels = BIT(2),  // Channel 2 (AIN2)
+    .buffer = sample_buffer,
+    .buffer_size = sizeof(sample_buffer),
+    .resolution = 12,
+};
+
+static const struct adc_channel_cfg channel_cfg = {
+    .gain = ADC_GAIN_1_6,                    
+    .reference = ADC_REF_INTERNAL,           
+    .acquisition_time = ADC_ACQ_TIME_DEFAULT,
+    .channel_id = 2,                         
+    .differential = 0,                       
+    .input_positive = NRF_SAADC_INPUT_AIN2,  
+    .input_negative = NRF_SAADC_INPUT_DISABLED,
+};
+
 
 static struct gpio_callback button_cb_data;
 
@@ -46,13 +76,11 @@ int sk6812_init(void)
     return 0;
 }
 
-
 #define COLOR_OFF     { .r = 0x00, .g = 0x00, .b = 0x00 }
 #define COLOR_RED     { .r = 0xFF, .g = 0x00, .b = 0x00 }
 #define COLOR_GREEN   { .r = 0x00, .g = 0xFF, .b = 0x00 }
 #define COLOR_BLUE    { .r = 0x00, .g = 0x00, .b = 0xFF }
 #define COLOR_WHITE   { .r = 0xFF, .g = 0xFF, .b = 0xFF }
-
 
 led_rgb colors[] = {
     COLOR_OFF,
@@ -60,6 +88,7 @@ led_rgb colors[] = {
     COLOR_GREEN,
     COLOR_BLUE,
     COLOR_WHITE,
+    COLOR_OFF,
 };
 
 uint8_t pixel0_index = 0;
@@ -94,12 +123,8 @@ void button_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t
     LOG_INF("Button pressed %d times", counter++);
 }
 
-int main(void) {
-    int ret;
-
-    LOG_INF("Hello, World!\n");
-
-    
+int vext_config() {
+    int ret = 0;
     if (!device_is_ready(vext_ctl.port)) {
         LOG_ERR("VEXT not ready");
         return 1;
@@ -115,6 +140,12 @@ int main(void) {
         return 1;
     }
 
+    LOG_INF("VEXT control pin configured and activated correctly");
+    return 0;
+}
+
+int led_config() {
+    int ret = 0;
     if (!device_is_ready(led.port)) {
         LOG_ERR("LED not ready");
         return 1;
@@ -126,6 +157,12 @@ int main(void) {
         return 1;
     }
 
+    LOG_INF("Green led configured correctly");
+    return 0;
+}
+
+int button_config() {
+    int ret = 0;
     if (!device_is_ready(button.port)) {
         LOG_ERR("Button not ready");
         return 1;
@@ -145,15 +182,75 @@ int main(void) {
 
     gpio_init_callback(&button_cb_data, button_pressed, BIT(button.pin));
     gpio_add_callback(button.port, &button_cb_data);
+    
+    LOG_INF("Button configured correctly!");
+    return 0;
+}
 
-    ret = sk6812_init();
+int battery_read_config(){
+    int ret  = 0;
+    if (!device_is_ready(adc_ctl.port)) {
+        LOG_ERR("ADC control GPIO not ready");
+        return 1;
+    }
+    
+    ret = gpio_pin_configure_dt(&adc_ctl, GPIO_OUTPUT);
     if (ret < 0) {
-        LOG_ERR("Couldn't initialize led strip");
+        LOG_ERR("ADC control configure failed: %d", ret);
+        return 1;
+    }
+    
+    ret = gpio_pin_set_dt(&adc_ctl, 1);
+    if (ret < 0) {
+        LOG_ERR("ADC control set failed: %d", ret);
+        return 1;
+    }
+    k_sleep(K_MSEC(10)); 
+    
+    adc_dev = DEVICE_DT_GET(DT_NODELABEL(adc));
+    if (!device_is_ready(adc_dev)) {
+        LOG_ERR("ADC device not ready");
         return 1;
     }
 
+    ret = adc_channel_setup(adc_dev, &channel_cfg);
+    if (ret < 0) {
+        LOG_ERR("ADC channel setup failed: %d", ret);
+        return 1;
+    }
+
+    LOG_INF("ADC initialized successfully");
+    return 0;
+}
+
+int main(void) {
+    int ret;
+
+    LOG_INF("Hello, World!\n");
+
+    ret = vext_config();
+    if(ret) return ret;
+
+    ret = led_config();
+    if(ret) return ret;
+
+    ret = button_config();
+    if(ret) return ret;
+
+    ret = sk6812_init();
+    if(ret) return ret;
+
+    ret = battery_read_config();
+    if(ret) return ret;
+
     while (1) {
-        k_sleep(K_MSEC(500));  // Check twice per second
+        ret = adc_read(adc_dev, &sequence);
+        if (ret == 0) {
+            LOG_INF("ADC AIN2 Value: %d", sample_buffer[0]);
+        } else {
+            LOG_ERR("ADC read failed: %d", ret);
+        }
+        k_sleep(K_MSEC(2000));
     }
 
     return 0;
