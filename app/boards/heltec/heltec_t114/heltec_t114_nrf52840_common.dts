@@ -8,8 +8,9 @@
 
 /dts-v1/;
 #include <nordic/nrf52840_qiaa.dtsi>
-#include "heltec_t114-pinctrl.dtsi"
+// #include "heltec_t114-pinctrl.dtsi"
 #include <zephyr/dt-bindings/input/input-event-codes.h>
+#include <zephyr/dt-bindings/led/led.h>
 
 / {
 	model = "Heltec T114";
@@ -21,12 +22,17 @@
 		zephyr,ieee802154 = &ieee802154;
 	};
 
-	leds {
+	digital_outputs {
 		compatible = "gpio-leds";
 
-		led0: led_0 {
+		led4: led_4 {
 			gpios = <&gpio1 3 GPIO_ACTIVE_LOW>;
 			label = "Green LED";
+		};
+
+		vext_control:vext_control {
+			gpios = <&gpio0 21 GPIO_ACTIVE_HIGH>;
+			label = "VEXT Control";
 		};
 	};
 
@@ -37,27 +43,28 @@
 			gpios = <&gpio1 10 GPIO_ACTIVE_HIGH>;
 			label = "Button 0";
 			zephyr,code = <INPUT_KEY_0>;
-			// debounce-interval-ms = <50>;
 		};
 	};
 
-	// pwmleds {
-	// 	compatible = "pwm-leds";
+	led_strip:led_strip {
+		compatible = "worldsemi,ws2812-gpio";
+		label = "SK6812_STRIP";
+		gpios = <&gpio0 14 GPIO_ACTIVE_HIGH>;
+		chain-length = <2>;
+		color-mapping = <LED_COLOR_ID_GREEN
+						LED_COLOR_ID_RED
+						LED_COLOR_ID_BLUE>;
+		status = "okay";
+	};
 
-	// 	red_pwm_led: led_pwm_0 {
-	// 		pwms = <&pwm0 0 PWM_MSEC(20) PWM_POLARITY_INVERTED>;
-	// 		label = "Red PWM LED";
-	// 	};
-	// };
-
+		
 	aliases {
-		led0 = &led0;
-		// pwm-led0 = &red_pwm_led;
-		// red-pwm-led = &red_pwm_led;
+		led4 = &led4;
+		led-strip = &led_strip;
 		button0 = &button0;
-		mcuboot-led0 = &led0;
-		// spi = &spi2;
+		mcuboot-led4 = &led4;
 		watchdog0 = &wdt0;
+		vext-control = &vext_control;
 	};
 };
 
@@ -82,45 +89,9 @@
 	status = "okay";
 };
 
-// &uart0 {
-// 	compatible = "nordic,nrf-uarte";
-// 	status = "okay";
-// 	current-speed = <115200>;
-// 	pinctrl-0 = <&uart0_default>;
-// 	pinctrl-1 = <&uart0_sleep>;
-// 	pinctrl-names = "default", "sleep";
-// };
-
-// &i2c0 {
-// 	compatible = "nordic,nrf-twi";
-// 	status = "okay";
-// 	pinctrl-0 = <&i2c0_default>;
-// 	pinctrl-1 = <&i2c0_sleep>;
-// 	pinctrl-names = "default", "sleep";
-// };
-
-// &i2c1 {
-// 	compatible = "nordic,nrf-twi";
-// 	status = "okay";
-// 	pinctrl-0 = <&i2c1_default>;
-// 	pinctrl-1 = <&i2c1_sleep>;
-// 	pinctrl-names = "default", "sleep";
-// };
-
-// &pwm0 {
-// 	status = "okay";
-// 	pinctrl-0 = <&pwm0_default>;
-// 	pinctrl-1 = <&pwm0_sleep>;
-// 	pinctrl-names = "default", "sleep";
-// };
-
-// &spi2 {
-// 	compatible = "nordic,nrf-spi";
-// 	status = "okay";
-// 	pinctrl-0 = <&spi2_default>;
-// 	pinctrl-1 = <&spi2_sleep>;
-// 	pinctrl-names = "default", "sleep";
-// };
+&led_strip {
+	status = "okay";
+};
 
 &ieee802154 {
 	status = "okay";
