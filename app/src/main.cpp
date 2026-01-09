@@ -8,6 +8,8 @@
 #include <zephyr/logging/log.h>
 #include <hal/nrf_saadc.h>
 
+#include <zephyr/drivers/display.h>
+#include <zephyr/sys/byteorder.h>
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_DBG);
 
@@ -36,13 +38,28 @@ LOG_MODULE_REGISTER(main, LOG_LEVEL_DBG);
 #error "Unsupported board: ADC_CONTROL_NODE device tree alias is not defined"
 #endif
 
+#define TFT_EN_NODE DT_ALIAS(tft_en)
+#if !DT_NODE_HAS_STATUS(TFT_EN_NODE, okay)
+#error "Unsupported board: TFT_EN_NODE device tree alias is not defined"
+#endif
+
+#define TFT_LED_EN DT_ALIAS(tft_led_en)
+#if !DT_NODE_HAS_STATUS(TFT_LED_EN, okay)
+#error "Unsupported board: TFT_LED_EN device tree alias is not defined"
+#endif
+
+
 static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED4_NODE, gpios);
 static const struct gpio_dt_spec button = GPIO_DT_SPEC_GET(BUTTON0_NODE, gpios);
 static const struct gpio_dt_spec vext_ctl = GPIO_DT_SPEC_GET(VEXT_CONTROL_NODE, gpios);
 static const struct gpio_dt_spec adc_ctl = GPIO_DT_SPEC_GET(ADC_CONTROL_NODE, gpios);
+static const struct gpio_dt_spec tft_en = GPIO_DT_SPEC_GET(TFT_EN_NODE, gpios);
+static const struct gpio_dt_spec tft_led_en = GPIO_DT_SPEC_GET(TFT_LED_EN, gpios);
 
 static const struct device *strip;
 static const struct device *adc_dev;
+static const struct device *display;
+
 
 static int16_t sample_buffer[1];
 static const struct adc_sequence sequence = {
@@ -223,6 +240,219 @@ int battery_read_config(){
     return 0;
 }
 
+int tft_init() {
+    display = DEVICE_DT_GET(DT_NODELABEL(tft_display));
+    if (!device_is_ready(display)) {
+        LOG_ERR("TFT display not ready");
+        return -1;
+    }
+    
+    LOG_INF("TFT display initialized");
+    return 0;
+}
+
+int tft_enable_display() {
+    
+    int ret  = 0;
+    if (!device_is_ready(tft_en.port)) {
+        LOG_ERR("TFT_EN GPIO not ready");
+        return 1;
+    }
+    
+    ret = gpio_pin_configure_dt(&tft_en, GPIO_OUTPUT);
+    if (ret < 0) {
+        LOG_ERR("TFT_EN configure failed: %d", ret);
+        return 1;
+    }
+    
+    ret = gpio_pin_set_dt(&tft_en, 1);
+    if (ret < 0) {
+        LOG_ERR("TFT_EN set failed: %d", ret);
+        return 1;
+    }
+
+    k_msleep(5);
+    LOG_INF("TFT_EN pin configured correctly!");
+    return 0;
+}
+// SYS_INIT(tft_enable_display, PRE_KERNEL_2, 0);
+
+int tft_enable_backlight() {
+    int ret  = 0;
+
+    if (!device_is_ready(tft_led_en.port)) {
+        LOG_ERR("TFT_LED_EN GPIO not ready");
+        return 1;
+    }
+    
+    ret = gpio_pin_configure_dt(&tft_led_en, GPIO_OUTPUT);
+    if (ret < 0) {
+        LOG_ERR("TFT_LED_EN configure failed: %d", ret);
+        return 1;
+    }
+    
+    ret = gpio_pin_set_dt(&tft_led_en, GPIO_ACTIVE_LOW);
+    if (ret < 0) {
+        LOG_ERR("TFT_LED_EN set failed: %d", ret);
+        return 1;
+    }
+    k_msleep(5);
+    LOG_INF("TFT_LED_EN pin configured correctly!");
+    return 0;
+}
+
+
+void tft_clear(uint16_t color) {
+    struct display_buffer_descriptor desc;
+    static uint16_t line_buf[135];  // One line of pixels
+    
+    // Fill buffer with color
+    for (int i = 0; i < 135; i++) {
+        line_buf[i] = color;
+    }
+    
+    desc.width = 135;
+    desc.height = 1;
+    desc.pitch = 135;
+    desc.buf_size = sizeof(line_buf);
+    
+    // Write line by line
+    for (int y = 0; y < 240; y++) {
+        display_write(display, 0, y, &desc, line_buf);
+    }
+}
+
+void tft_draw_border(uint16_t color) {
+    uint16_t c = sys_cpu_to_be16(color);
+    struct display_buffer_descriptor desc;
+    
+    static uint16_t h_line[135];
+    for (int i = 0; i < 135; i++) h_line[i] = c;
+    
+    desc.width = 135;
+    desc.height = 1;
+    desc.pitch = 135;
+    desc.buf_size = sizeof(h_line);
+    
+    display_write(display, 0, 0, &desc, h_line);      // Top edge
+    display_write(display, 0, 239, &desc, h_line);    // Bottom edge
+    
+    // Left and right vertical lines (1 pixel wide, full height)
+    static uint16_t pixel[1];
+    pixel[0] = c;
+    
+    desc.width = 1;
+    desc.height = 1;
+    desc.pitch = 1;
+    desc.buf_size = sizeof(pixel);
+    
+    for (int y = 0; y < 240; y++) {
+        display_write(display, 0, y, &desc, pixel);    // Left edge
+        display_write(display, 134, y, &desc, pixel);  // Right edge
+    }
+}
+
+void tft_draw_corners(void) {
+    struct display_buffer_descriptor desc;
+    static uint16_t block[10 * 10];  // 10x10 pixel blocks
+    
+    desc.width = 10;
+    desc.height = 10;
+    desc.pitch = 10;
+    desc.buf_size = sizeof(block);
+    
+    // Top-left: Red
+    for (int i = 0; i < 100; i++) block[i] = sys_cpu_to_be16(0xF800);
+    display_write(display, 0, 0, &desc, block);
+    
+    // Top-right: Green
+    for (int i = 0; i < 100; i++) block[i] = sys_cpu_to_be16(0x07E0);
+    display_write(display, 125, 0, &desc, block);  // 135 - 10 = 125
+    
+    // Bottom-left: Blue
+    for (int i = 0; i < 100; i++) block[i] = sys_cpu_to_be16(0x001F);
+    display_write(display, 0, 230, &desc, block);  // 240 - 10 = 230
+    
+    // Bottom-right: White
+    for (int i = 0; i < 100; i++) block[i] = sys_cpu_to_be16(0xFFFF);
+    display_write(display, 125, 230, &desc, block);
+}
+
+int tft_config() {
+    if (tft_enable_display() < 0) {
+        LOG_ERR("Failed to enable TFT display");
+        return 1;
+    }
+    
+    if (tft_enable_backlight() < 0) {
+        LOG_ERR("Failed to enable TFT backlight");
+        return 1;
+    }
+    
+    if (tft_init() < 0) {
+        LOG_ERR("Failed to initialize TFT display");
+        return 1;
+    }
+    
+    LOG_INF("Display blanking off");
+    display_blanking_off(display);
+    k_msleep(1000);
+    
+    LOG_INF("Display fill");
+    
+    struct display_buffer_descriptor buf_desc = {
+        .width = 1,           // Width in pixels
+        .height = 1,          // Height in pixels  
+        .pitch = 2,           // Bytes per line (2 for RGB565)
+    };
+    
+    // Test pixel data (RGB565 red)
+    uint8_t test_pixel[2] = {0xF8, 0x00};
+    
+    // Write single pixel
+    int ret = display_write(display, 10, 10, &buf_desc, test_pixel);
+    if (ret < 0) {
+        LOG_ERR("Display write failed: %d", ret);
+    }
+    k_msleep(1000);
+    
+    LOG_INF("Display black");
+    tft_clear(sys_cpu_to_be16(0x0000));
+    k_msleep(2000);
+
+    LOG_INF("Display red");
+    tft_clear(sys_cpu_to_be16(0xF800));  // Red
+    k_msleep(2000);
+    
+    LOG_INF("Display green");
+    tft_clear(sys_cpu_to_be16(0x07E0));  // Green
+    k_msleep(2000);
+    
+    LOG_INF("Display blue");
+    tft_clear(sys_cpu_to_be16(0x001F));  // Blue
+    k_msleep(2000);
+    
+    LOG_INF("Display white");
+    tft_clear(sys_cpu_to_be16(0xFFFF));  // White
+
+    LOG_INF("Display black");
+    tft_clear(sys_cpu_to_be16(0x0000));
+    k_msleep(500);
+
+    LOG_INF("Display white border");
+    tft_draw_border(0xFFFF);
+    k_msleep(2000);
+
+    LOG_INF("Display corner markers");
+    tft_draw_corners();
+    k_msleep(2000);
+
+
+
+
+    return 0;
+}
+
 int main(void) {
     int ret;
 
@@ -242,7 +472,13 @@ int main(void) {
 
     ret = battery_read_config();
     if(ret) return ret;
+    
+    ret = tft_config();
+    if(ret) return ret;
 
+    k_msleep(1000);
+
+    LOG_INF("============ Starting main loop ============");
     while (1) {
         ret = adc_read(adc_dev, &sequence);
         if (ret == 0) {

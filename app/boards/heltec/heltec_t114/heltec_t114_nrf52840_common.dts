@@ -8,9 +8,10 @@
 
 /dts-v1/;
 #include <nordic/nrf52840_qiaa.dtsi>
-// #include "heltec_t114-pinctrl.dtsi"
+#include "heltec_t114-pinctrl.dtsi"
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 #include <zephyr/dt-bindings/led/led.h>
+#include <zephyr/dt-bindings/mipi_dbi/mipi_dbi.h>
 
 / {
 	model = "Heltec T114";
@@ -20,6 +21,7 @@
 		zephyr,sram = &sram0;
 		zephyr,flash = &flash0;
 		zephyr,ieee802154 = &ieee802154;
+		zephyr,display = &tft_display;  /* ← Add this line */
 	};
 
 	digital_outputs {
@@ -38,6 +40,16 @@
 		adc_control:adc_control {
 			gpios = <&gpio0 6 GPIO_ACTIVE_HIGH>;
 			label = "ADC Control";
+		};
+
+		tft_en:tft_en {
+			gpios = <&gpio0 3 GPIO_ACTIVE_LOW>;
+			label = "TFT_EN - display enable";
+		};
+		
+		tft_led_en:tft_led_en {
+			gpios = <&gpio0 15 GPIO_ACTIVE_LOW>;
+			label = "TFT_LED_EN - display backlight";
 		};
 	};
 
@@ -62,6 +74,43 @@
 		status = "okay";
 	};
 
+	mipi_dbi_tft {
+		compatible = "zephyr,mipi-dbi-spi";
+		spi-dev = <&spi1>;
+		write-only;
+		dc-gpios = <&gpio0 12 GPIO_ACTIVE_HIGH>;  // PIN_TFT_DC = P0.12
+		reset-gpios = <&gpio0 2 GPIO_ACTIVE_LOW>; // PIN_TFT_RST = P0.02
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		tft_display: st7789v@0 {
+			compatible = "sitronix,st7789v";
+			mipi-max-frequency = <40000000>;
+			reg = <0>;
+			width = <135>;
+			height = <240>;
+			x-offset = <52>;
+			y-offset = <40>;
+			vcom = <0x19>;
+			gctrl = <0x35>;
+			vrhs = <0x12>;
+			vdvs = <0x20>;
+			mdac = <0x00>;
+			gamma = <0x01>;
+			colmod = <0x55>;
+			lcm = <0x2c>;
+			porch-param = [0c 0c 00 33 33];
+			cmd2en-param = [5a 69 02 01];
+			pwctrl1-param = [a4 a1];
+			pvgam-param = [D0 04 0D 11 13 2B 3F 54 4C 18 0D 0B 1F 23];
+			nvgam-param = [D0 04 0C 11 13 2C 3F 44 51 2F 1F 1F 20 23];
+			ram-param = [00 F0];
+			rgb-param = [CD 08 14];
+			mipi-mode = "MIPI_DBI_MODE_SPI_4WIRE";
+			status = "okay";
+		};
+	};
+
 	aliases {
 		led4 = &led4;
 		led-strip = &led_strip;
@@ -70,6 +119,8 @@
 		watchdog0 = &wdt0;
 		vext-control = &vext_control;
 		adc-control = &adc_control;
+		tft-en = &tft_en;
+		tft-led-en = &tft_led_en; 
 	};
 };
 
@@ -112,6 +163,13 @@
 
 &ieee802154 {
 	status = "okay";
+};
+
+&spi1 {
+    status = "okay";
+    pinctrl-0 = <&tft_spi_pins>; 
+    pinctrl-names = "default";
+    cs-gpios = <&gpio0 11 GPIO_ACTIVE_LOW>; /* PIN_TFT_CS = P0.11 */
 };
 
 zephyr_udc0: &usbd {
