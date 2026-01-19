@@ -12,6 +12,7 @@
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 #include <zephyr/dt-bindings/led/led.h>
 #include <zephyr/dt-bindings/mipi_dbi/mipi_dbi.h>
+#include <dt-bindings/lora/sx126x.h>
 
 / {
 	model = "Heltec T114";
@@ -170,6 +171,26 @@
     pinctrl-0 = <&tft_spi_pins>; 
     pinctrl-names = "default";
     cs-gpios = <&gpio0 11 GPIO_ACTIVE_LOW>; /* PIN_TFT_CS = P0.11 */
+};
+
+&spi0 {
+    status = "okay";
+    pinctrl-0 = <&lora_spi_pins>;
+    pinctrl-names = "default";
+    cs-gpios = <&gpio0 24 GPIO_ACTIVE_LOW>;
+
+    lora: sx1262@0 {
+		compatible = "semtech,sx1262";
+		reg = <0>;
+		spi-max-frequency = <8000000>;
+		reset-gpios = <&gpio0 25 GPIO_ACTIVE_LOW>;
+		busy-gpios = <&gpio0 17 GPIO_ACTIVE_HIGH>;
+		dio1-gpios = <&gpio0 20 GPIO_ACTIVE_HIGH>;
+		dio2-tx-enable;
+		dio3-tcxo-voltage = <SX126X_DIO3_TCXO_1V8>;
+		tcxo-power-startup-delay-ms = <5>;
+		status = "okay";
+	};
 };
 
 zephyr_udc0: &usbd {
