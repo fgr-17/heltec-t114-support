@@ -11,6 +11,7 @@
 #include <zephyr/drivers/display.h>
 #include <zephyr/sys/byteorder.h>
 
+#include <zephyr/drivers/lora.h>
 LOG_MODULE_REGISTER(main, LOG_LEVEL_DBG);
 
 #define LED4_NODE DT_ALIAS(led4)
@@ -59,7 +60,31 @@ static const struct gpio_dt_spec tft_led_en = GPIO_DT_SPEC_GET(TFT_LED_EN, gpios
 static const struct device *strip;
 static const struct device *adc_dev;
 static const struct device *display;
+static const struct device *lora_dev;
 
+struct lora_modem_config config = {
+    .frequency = 868000000,  /* 915 MHz, adjust for your region */
+    .bandwidth = BW_125_KHZ,
+    .datarate = SF_7,
+    .coding_rate = CR_4_5,
+    .preamble_len = 8,
+    .tx_power = 14,
+    .tx = true,
+};
+
+int lora_init() {
+    lora_dev = DEVICE_DT_GET(DT_NODELABEL(lora));
+    if (!device_is_ready(lora_dev)) {
+        LOG_ERR("LoRa device not ready");
+        return 1;
+    }
+    if (lora_config(lora_dev, &config)) {
+        LOG_ERR("LoRa configuration failed");
+        return 1;
+    }
+    LOG_INF("LoRa configured successfully!");
+    return 0;
+}
 
 static int16_t sample_buffer[1];
 static const struct adc_sequence sequence = {
@@ -409,48 +434,59 @@ int tft_config() {
     // Test pixel data (RGB565 red)
     uint8_t test_pixel[2] = {0xF8, 0x00};
     
+    #define TEST_SCREEN_WAIT 200
     // Write single pixel
     int ret = display_write(display, 10, 10, &buf_desc, test_pixel);
     if (ret < 0) {
         LOG_ERR("Display write failed: %d", ret);
     }
-    k_msleep(1000);
+    k_msleep(TEST_SCREEN_WAIT);
     
     LOG_INF("Display black");
     tft_clear(sys_cpu_to_be16(0x0000));
-    k_msleep(2000);
+    k_msleep(TEST_SCREEN_WAIT);
 
     LOG_INF("Display red");
     tft_clear(sys_cpu_to_be16(0xF800));  // Red
-    k_msleep(2000);
+    k_msleep(TEST_SCREEN_WAIT);
     
     LOG_INF("Display green");
     tft_clear(sys_cpu_to_be16(0x07E0));  // Green
-    k_msleep(2000);
+    k_msleep(TEST_SCREEN_WAIT);
     
     LOG_INF("Display blue");
     tft_clear(sys_cpu_to_be16(0x001F));  // Blue
-    k_msleep(2000);
+    k_msleep(TEST_SCREEN_WAIT);
     
     LOG_INF("Display white");
     tft_clear(sys_cpu_to_be16(0xFFFF));  // White
 
     LOG_INF("Display black");
     tft_clear(sys_cpu_to_be16(0x0000));
-    k_msleep(500);
+    k_msleep(TEST_SCREEN_WAIT);
 
     LOG_INF("Display white border");
     tft_draw_border(0xFFFF);
-    k_msleep(2000);
+    k_msleep(TEST_SCREEN_WAIT);
 
     LOG_INF("Display corner markers");
     tft_draw_corners();
-    k_msleep(2000);
-
-
-
+    k_msleep(TEST_SCREEN_WAIT);
 
     return 0;
+}
+
+void debug_lora_gpios() {
+    // Get GPIO specs from devicetree
+    const struct gpio_dt_spec busy = GPIO_DT_SPEC_GET(DT_NODELABEL(lora), busy_gpios);
+    const struct gpio_dt_spec dio1 = GPIO_DT_SPEC_GET(DT_NODELABEL(lora), dio1_gpios);
+    
+    gpio_pin_configure_dt(&busy, GPIO_INPUT);
+    gpio_pin_configure_dt(&dio1, GPIO_INPUT);
+    
+    LOG_INF("Before lora_send:");
+    LOG_INF("  BUSY (P0.17): %d", gpio_pin_get_dt(&busy));
+    LOG_INF("  DIO1 (P0.20): %d", gpio_pin_get_dt(&dio1));
 }
 
 int main(void) {
@@ -476,7 +512,25 @@ int main(void) {
     ret = tft_config();
     if(ret) return ret;
 
+    ret = lora_init();
+    if(ret) return ret;
+    const struct gpio_dt_spec busy = GPIO_DT_SPEC_GET(DT_NODELABEL(lora), busy_gpios);
+    gpio_pin_configure_dt(&busy, GPIO_INPUT);
+    LOG_INF("BUSY before lora_init: %d", gpio_pin_get_dt(&busy));
     k_msleep(1000);
+
+    uint8_t tx_buf[255];
+    const char *payload = "Hello from T114!\n\r";
+    size_t payload_len = strlen(payload);
+    size_t total_len = 4 + payload_len;
+    
+    tx_buf[0] = 0x00;  // Address high byte
+    tx_buf[1] = 0x00;  // Address low byte  
+    tx_buf[2] = 0x00;  // Network ID
+    tx_buf[3] = (uint8_t)total_len;  // Total length
+    memcpy(&tx_buf[4], payload, payload_len);
+    
+    
 
     LOG_INF("============ Starting main loop ============");
     while (1) {
@@ -486,6 +540,31 @@ int main(void) {
         } else {
             LOG_ERR("ADC read failed: %d", ret);
         }
+
+        ret = lora_send(lora_dev, tx_buf, total_len);    
+        if(ret) {
+            LOG_ERR("LoRa send failed: %d", ret);
+        } else {
+            LOG_INF("Message sent successfully");
+        }
+
+        // uint8_t rx_buf[255];
+        // int16_t rssi;
+        // int8_t snr;
+        // int len;
+        
+        // LOG_INF("Waiting for LoRa packet...");
+        // len = lora_recv(lora_dev, rx_buf, sizeof(rx_buf), K_SECONDS(10), &rssi, &snr);
+        
+        // if (len > 0) {
+        //     LOG_INF("Received %d bytes, RSSI: %d, SNR: %d", len, rssi, snr);
+        //     LOG_HEXDUMP_INF(rx_buf, static_cast<uint32_t>(len), "Data:");
+        // } else if (len == 0) {
+        //     LOG_INF("Timeout - no packet received");
+        // } else {
+        //     LOG_ERR("RX error: %d", len);
+        // }
+        
         k_sleep(K_MSEC(2000));
     }
 
