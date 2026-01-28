@@ -52,6 +52,16 @@
 			gpios = <&gpio0 15 GPIO_ACTIVE_LOW>;
 			label = "TFT_LED_EN - display backlight";
 		};
+
+		gnss_rst: gnss_rst {
+			gpios = <&gpio1 6 GPIO_ACTIVE_LOW>;
+			label = "gnss Reset";
+		};
+		
+		gnss_wakeup: gnss_wakeup {
+			gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
+			label = "gnss Wake Up";
+		};
 	};
 
 	buttons {
@@ -63,6 +73,14 @@
 			zephyr,code = <INPUT_KEY_0>;
 		};
 	};
+
+	gnss_pps {
+        compatible = "gpio-keys";
+        gnss_pps_pin: gnss_pps {
+            gpios = <&gpio1 4 GPIO_ACTIVE_HIGH>;  /* P1.04 */
+            label = "gnss PPS";
+        };
+    };
 
 	led_strip:led_strip {
 		compatible = "worldsemi,ws2812-gpio";
@@ -122,6 +140,8 @@
 		adc-control = &adc_control;
 		tft-en = &tft_en;
 		tft-led-en = &tft_led_en; 
+		gnss-rst = &gnss_rst;
+		gnss-wakeup = &gnss_wakeup;
 	};
 };
 
@@ -189,6 +209,19 @@
 		dio2-tx-enable;
 		dio3-tcxo-voltage = <SX126X_DIO3_TCXO_1V8>;
 		tcxo-power-startup-delay-ms = <5>;
+		status = "okay";
+	};
+};
+
+&uart1 {
+    compatible = "nordic,nrf-uarte";
+    status = "okay";
+    current-speed = <9600>;
+    pinctrl-0 = <&gnss_uart_pins>;
+    pinctrl-names = "default";
+
+	gnss: gnss-nmea-generic {
+		compatible = "gnss-nmea-generic";
 		status = "okay";
 	};
 };
