@@ -7,8 +7,18 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
 project(${APP})
 
-target_sources(app PRIVATE src/main.cpp)
-target_include_directories(app PRIVATE src)
+file(GLOB_RECURSE APP_C_SOURCES 
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/boards/*.c
+)
+
+file(GLOB_RECURSE APP_H_SOURCES 
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/boards/*.h
+)
+
+target_sources(app PRIVATE ${APP_C_SOURCES})
+target_include_directories(app PRIVATE src boards/heltec/heltec_t114)
 
 set(ALLOWED_BOARDS "promicro_nrf52840;heltec_t114")
 list(FIND ALLOWED_BOARDS ${BOARD} BOARD_INDEX)
@@ -16,3 +26,9 @@ if(BOARD_INDEX EQUAL -1)
   message(FATAL_ERROR 
     "This application is intended to be built only for the following boards: ${ALLOWED_BOARDS}. Current BOARD is: ${BOARD}")
 endif()
+
+
+add_custom_target(fix
+    COMMAND clang-format -i --style=file:${ZEPHYR_BASE}/.clang-format ${APP_C_SOURCES} ${APP_H_SOURCES}
+    COMMENT "Formatting source files with Zephyr style"
+)
