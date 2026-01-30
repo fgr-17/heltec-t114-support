@@ -1,3 +1,6 @@
+#include <string.h>
+#include <stdlib.h>
+
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
@@ -6,12 +9,14 @@
 #include <zephyr/drivers/uart.h>
 #include <zephyr/drivers/adc.h>
 #include <zephyr/logging/log.h>
-#include <hal/nrf_saadc.h>
-
 #include <zephyr/drivers/display.h>
 #include <zephyr/sys/byteorder.h>
-
 #include <zephyr/drivers/lora.h>
+#include <zephyr/drivers/gnss.h>
+
+#include <hal/nrf_saadc.h>
+
+
 LOG_MODULE_REGISTER(main, LOG_LEVEL_DBG);
 
 #define LED4_NODE DT_ALIAS(led4)
@@ -56,11 +61,16 @@ static const struct gpio_dt_spec vext_ctl = GPIO_DT_SPEC_GET(VEXT_CONTROL_NODE, 
 static const struct gpio_dt_spec adc_ctl = GPIO_DT_SPEC_GET(ADC_CONTROL_NODE, gpios);
 static const struct gpio_dt_spec tft_en = GPIO_DT_SPEC_GET(TFT_EN_NODE, gpios);
 static const struct gpio_dt_spec tft_led_en = GPIO_DT_SPEC_GET(TFT_LED_EN, gpios);
+static const struct gpio_dt_spec gnss_rst = GPIO_DT_SPEC_GET(DT_ALIAS(gnss_rst), gpios);
+static const struct gpio_dt_spec gnss_wakeup = GPIO_DT_SPEC_GET(DT_ALIAS(gnss_wakeup), gpios);
 
-static const struct device *strip;
-static const struct device *adc_dev;
-static const struct device *display;
-static const struct device *lora_dev;
+static const struct device *strip = DEVICE_DT_GET(STRIP_NODE);
+static const struct device *adc_dev = DEVICE_DT_GET(DT_NODELABEL(adc));
+static const struct device *display = DEVICE_DT_GET(DT_NODELABEL(tft_display));
+static const struct device *lora_dev = DEVICE_DT_GET(DT_NODELABEL(lora));
+static const struct device *gnss_uart = DEVICE_DT_GET(DT_NODELABEL(uart1));
+static const struct device *gnss_dev = DEVICE_DT_GET(DT_NODELABEL(gnss));
+
 
 struct lora_modem_config config = {
     .frequency = 868000000,  /* 915 MHz, adjust for your region */
@@ -73,7 +83,6 @@ struct lora_modem_config config = {
 };
 
 int lora_init() {
-    lora_dev = DEVICE_DT_GET(DT_NODELABEL(lora));
     if (!device_is_ready(lora_dev)) {
         LOG_ERR("LoRa device not ready");
         return 1;
@@ -110,7 +119,6 @@ static struct gpio_callback button_cb_data;
 
 int sk6812_init(void)
 {
-    strip = DEVICE_DT_GET(STRIP_NODE);
     if (!device_is_ready(strip)) {
         LOG_ERR("SK6812 strip not ready");
         return 1;
@@ -249,7 +257,6 @@ int battery_read_config(){
     }
     k_sleep(K_MSEC(10)); 
     
-    adc_dev = DEVICE_DT_GET(DT_NODELABEL(adc));
     if (!device_is_ready(adc_dev)) {
         LOG_ERR("ADC device not ready");
         return 1;
@@ -266,7 +273,6 @@ int battery_read_config(){
 }
 
 int tft_init() {
-    display = DEVICE_DT_GET(DT_NODELABEL(tft_display));
     if (!device_is_ready(display)) {
         LOG_ERR("TFT display not ready");
         return -1;
@@ -489,6 +495,59 @@ void debug_lora_gpios() {
     LOG_INF("  DIO1 (P0.20): %d", gpio_pin_get_dt(&dio1));
 }
 
+/**
+ * Send a LoRa message with Waveshare DTU header
+ * @param message - null-terminated string to send
+ * @return 0 on success, negative error code on failure
+ */
+
+ int lora_send_message_waveshare_dtu(const char *message) {
+    if (!message) return -EINVAL;
+    
+    uint8_t tx_buf[255];
+    size_t payload_len = strlen(message);
+    
+    if (payload_len > 251) {
+        payload_len = 251;
+    }
+    
+    size_t total_len = 4 + payload_len;
+    
+    tx_buf[0] = 0x00;  /* Address high byte */
+    tx_buf[1] = 0x00;  /* Address low byte */
+    tx_buf[2] = 0x00;  /* Network ID */
+    tx_buf[3] = (uint8_t)total_len;
+    
+    memcpy(&tx_buf[4], message, payload_len);
+    
+    return lora_send(lora_dev, tx_buf, total_len);
+}
+
+static void gnss_data_cb(const struct device *dev, const struct gnss_data *data) {
+    if (data->info.fix_status != GNSS_FIX_STATUS_NO_FIX) {
+        LOG_INF("GNSS FIX: %.6f, %.6f | Alt: %d.%dm | Sats: %d",
+                data->nav_data.latitude / 1000000.0,
+                data->nav_data.longitude / 1000000.0,
+                data->nav_data.altitude / 1000,
+                data->nav_data.altitude % 1000,
+                data->info.satellites_cnt);
+    } else {
+        LOG_INF("GNSS: No fix | Sats: %d", data->info.satellites_cnt);
+    }
+}
+
+int gnss_init() {
+    if (!device_is_ready(gnss_dev)) {
+        LOG_ERR("GNSS device not ready");
+        return -1;
+    }
+    
+    LOG_INF("GNSS subsystem initialized");
+    return 0;
+}
+
+GNSS_DATA_CALLBACK_DEFINE(DEVICE_DT_GET(DT_NODELABEL(gnss)), gnss_data_cb);
+
 int main(void) {
     int ret;
 
@@ -514,39 +573,41 @@ int main(void) {
 
     ret = lora_init();
     if(ret) return ret;
-    const struct gpio_dt_spec busy = GPIO_DT_SPEC_GET(DT_NODELABEL(lora), busy_gpios);
-    gpio_pin_configure_dt(&busy, GPIO_INPUT);
-    LOG_INF("BUSY before lora_init: %d", gpio_pin_get_dt(&busy));
-    k_msleep(1000);
 
-    uint8_t tx_buf[255];
-    const char *payload = "Hello from T114!\n\r";
-    size_t payload_len = strlen(payload);
-    size_t total_len = 4 + payload_len;
-    
-    tx_buf[0] = 0x00;  // Address high byte
-    tx_buf[1] = 0x00;  // Address low byte  
-    tx_buf[2] = 0x00;  // Network ID
-    tx_buf[3] = (uint8_t)total_len;  // Total length
-    memcpy(&tx_buf[4], payload, payload_len);
-    
+    ret = gnss_init();
+    if (ret) return ret;
+
+    lora_send_message_waveshare_dtu("Initializing T114\n\r");
+    if(ret) LOG_ERR("Failed to send LoRa message: %d", ret);
     
 
     LOG_INF("============ Starting main loop ============");
     while (1) {
-        ret = adc_read(adc_dev, &sequence);
-        if (ret == 0) {
-            LOG_INF("ADC AIN2 Value: %d", sample_buffer[0]);
-        } else {
-            LOG_ERR("ADC read failed: %d", ret);
+            
+        static int64_t last_adc = 0;
+        static int64_t last_lora = 0;
+
+        int64_t now = k_uptime_get();
+
+        if (now - last_adc > 2000) {
+            ret = adc_read(adc_dev, &sequence);
+            if (ret == 0) {
+                LOG_INF("ADC AIN2 Value: %d", sample_buffer[0]);
+            } else {
+                LOG_ERR("ADC read failed: %d", ret);
+            }
+            last_adc = now;
         }
 
-        ret = lora_send(lora_dev, tx_buf, total_len);    
-        if(ret) {
-            LOG_ERR("LoRa send failed: %d", ret);
-        } else {
-            LOG_INF("Message sent successfully");
+        if (now - last_lora > 2000) {
+            char msg[64];
+            snprintf(msg, sizeof(msg), "ADC Value: %d", sample_buffer[0]);
+            lora_send_message_waveshare_dtu(msg);
+            if(ret) LOG_ERR("Failed to send LoRa message: %d", ret);
+            last_lora = now;
         }
+
+        k_msleep(10);
 
         // uint8_t rx_buf[255];
         // int16_t rssi;
@@ -564,8 +625,6 @@ int main(void) {
         // } else {
         //     LOG_ERR("RX error: %d", len);
         // }
-        
-        k_sleep(K_MSEC(2000));
     }
 
     return 0;

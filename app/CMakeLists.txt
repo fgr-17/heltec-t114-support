@@ -8,6 +8,7 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(${APP})
 
 target_sources(app PRIVATE src/main.cpp)
+target_include_directories(app PRIVATE src)
 
 set(ALLOWED_BOARDS "promicro_nrf52840;heltec_t114")
 list(FIND ALLOWED_BOARDS ${BOARD} BOARD_INDEX)
