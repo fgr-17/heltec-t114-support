@@ -19,12 +19,11 @@ struct led_rgb colors[] = {
 uint8_t pixel0_index = 0;
 uint8_t pixel1_index = 1;
 
-
 /**
  * @brief Rotate the LED strip pixels
  * @return 0 on success, 1 on failure
  */
- 
+
 int sk6812_pixel_rotate()
 {
 	struct led_rgb pixels[2] = {colors[pixel0_index], colors[pixel1_index]};
