@@ -18,9 +18,9 @@ file(GLOB_RECURSE APP_H_SOURCES
 )
 
 target_sources(app PRIVATE ${APP_C_SOURCES})
-target_include_directories(app PRIVATE src boards/heltec/heltec_t114)
+target_include_directories(app PRIVATE src boards/heltec/heltec_t114_v2)
 
-set(ALLOWED_BOARDS "promicro_nrf52840;heltec_t114")
+set(ALLOWED_BOARDS "promicro_nrf52840;heltec_t114_v2")
 list(FIND ALLOWED_BOARDS ${BOARD} BOARD_INDEX)
 if(BOARD_INDEX EQUAL -1)
   message(FATAL_ERROR 
