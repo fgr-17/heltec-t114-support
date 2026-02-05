@@ -1,3 +1,11 @@
+/*
+ * Copyright (c) 2023 The Zephyr Project Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#ifndef BOARD_INIT_H
+#define BOARD_INIT_H
+
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/led_strip.h>
 #include <zephyr/drivers/adc.h>
@@ -19,3 +27,5 @@ extern const struct device *adc_dev;
 extern const struct device *tft_display_dev;
 extern const struct device *lora_dev;
 extern const struct device *gnss_dev;
+
+#endif /* BOARD_INIT_H */
