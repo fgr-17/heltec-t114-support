@@ -1,5 +1,5 @@
-identifier: heltec_t114/nrf52840
-name: Heltec T114
+identifier: heltec_t114_v2/nrf52840
+name: Heltec T114 v2
 type: mcu
 arch: arm
 ram: 256

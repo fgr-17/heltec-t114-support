@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-if BOARD_HELTEC_T114
+if BOARD_HELTEC_T114_V2
 
 source "boards/common/usb/Kconfig.cdc_acm_serial.defconfig"
 
@@ -19,8 +19,9 @@ source "boards/common/usb/Kconfig.cdc_acm_serial.defconfig"
 # the offset is applied here so that the full partition size can be used when
 # the bootloader Kconfig option has been disabled.
 
-config FLASH_LOAD_OFFSET
-	default 0x1000
-	depends on BOARD_HAS_NRF5_BOOTLOADER && (MCUBOOT || !USE_DT_CODE_PARTITION)
+# TBD
+# config FLASH_LOAD_OFFSET
+#	default 0x1000
+#	depends on BOARD_HAS_NRF5_BOOTLOADER && (MCUBOOT || !USE_DT_CODE_PARTITION)
 
-endif # BOARD_HELTEC_T114
+endif # BOARD_HELTEC_T114_V2

@@ -5,5 +5,5 @@
  */
 
 /dts-v1/;
-#include "heltec_t114_nrf52840_common.dts"
+#include "heltec_t114_v2_nrf52840_common.dts"
 #include <nordic/nrf52840_partition.dtsi>

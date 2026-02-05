@@ -1,7 +1,7 @@
 # Copyright (c) 2024 MASSDRIVER EI (massdriver.space)
 # SPDX-License-Identifier: Apache-2.0
 
-if BOARD_HELTEC_T114
+if BOARD_HELTEC_T114_V2
 
 config BOARD_HAS_NRF5_BOOTLOADER
 	bool "Board has nRF5 bootloader"
@@ -10,4 +10,4 @@ config BOARD_HAS_NRF5_BOOTLOADER
 	  If selected, applications are linked so that they can be loaded by Nordic
 	  nRF5 bootloader.
 
-endif # BOARD_HELTEC_T114
+endif # BOARD_HELTEC_T114_V2
