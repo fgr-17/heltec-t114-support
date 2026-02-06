@@ -6,6 +6,7 @@
  * {
  *   FLASH (rx)     : ORIGIN = 0x26000, LENGTH = 0xED000 - 0x26000
  */
+ 
  / {
 	chosen {
 		zephyr,code-partition = &code_partition;
