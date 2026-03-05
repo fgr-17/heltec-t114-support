@@ -52,13 +52,13 @@ Once you go through the previous steps, you should be ready to compile the proje
 
 ~~~bash
 cd workspace
-west build -b heltec_t114 -s app
+west build -b heltec_t114_v2 -s app
 ~~~
 
 If everything runs smoothly, you should see somethign like this:
 
 ~~~bash
-west build -b heltec_t114 -s app/ --pristine
+west build -b heltec_t114_v2 -s app/ --pristine
 -- west build: making build dir /workspace/build pristine
 -- west build: generating a build system
 Loading Zephyr default modules (Zephyr base).
@@ -68,16 +68,16 @@ Loading Zephyr default modules (Zephyr base).
 -- Cache files will be written to: /root/.cache/zephyr
 -- Zephyr version: 4.3.0 (/workspace/zephyr)
 -- Found west (found suitable version "1.5.0", minimum required is "0.14.0")
--- Board: heltec_t114, qualifiers: nrf52840
+-- Board: heltec_t114_v2, qualifiers: nrf52840
 -- Found host-tools: zephyr 0.17.4 (/opt/toolchains/zephyr-sdk-0.17.4)
 -- Found toolchain: zephyr 0.17.4 (/opt/toolchains/zephyr-sdk-0.17.4)
 -- Found Dtc: /opt/toolchains/zephyr-sdk-0.17.4/sysroots/x86_64-pokysdk-linux/usr/bin/dtc (found suitable version "1.7.0", minimum required is "1.4.6")
--- Found BOARD.dts: /workspace/app/boards/heltec/heltec_t114/heltec_t114_nrf52840.dts
+-- Found BOARD.dts: /workspace/app/boards/heltec/heltec_t114_v2/heltec_t114_nrf52840.dts
 -- Generated zephyr.dts: /workspace/build/zephyr/zephyr.dts
 -- Generated pickled edt: /workspace/build/zephyr/edt.pickle
 -- Generated devicetree_generated.h: /workspace/build/zephyr/include/generated/zephyr/devicetree_generated.h
 Parsing /workspace/zephyr/Kconfig
-Loaded configuration '/workspace/app/boards/heltec/heltec_t114/heltec_t114_nrf52840_defconfig'
+Loaded configuration '/workspace/app/boards/heltec/heltec_t114_v2/heltec_t114_nrf52840_defconfig'
 Merged configuration '/workspace/app/prj.conf'
 Configuration saved to '/workspace/build/zephyr/.config'
 Kconfig header saved to '/workspace/build/zephyr/include/generated/zephyr/autoconf.h'
@@ -101,7 +101,7 @@ Memory region         Used Size  Region Size  %age Used
            FLASH:       42388 B         1 MB      4.04%
              RAM:       13432 B       256 KB      5.12%
         IDT_LIST:          0 GB        32 KB      0.00%
-Generating files from /workspace/build/zephyr/zephyr.elf for board: heltec_t114
+Generating files from /workspace/build/zephyr/zephyr.elf for board: heltec_t114_v2
 ~~~
 
 Your binaries should be delivered in the `build/` dir.
@@ -112,16 +112,20 @@ This project includes custom device tree files for the Heltec T114 board:
 
 - `heltec_t114_nrf52840.dts` - Main board device tree file
 - `heltec_t114_nrf52840_common.dts` - Common device tree definitions
-- `heltec_t114-pinctrl.dtsi` - Pin control definitions
+- `heltec_t114_v2-pinctrl.dtsi` - Pin control definitions
 - `heltec_t114_nrf52840_partition_uf2.dtsi` - Partition definitions (currently not usable)
 
-**Important Limitations:** For now, only "baremetal" Zephyr works, flashing from address `0x0000-0000` (start of flash). There is no MBR (Master Boot Record), SoftDevice (Nordic's Bluetooth stack), or bootloader support. All the `*_uf2.dts*` files are not usable so far.
+**Current project targets :** There's 2 ways of building the project;
+
++ **baremetal**: flashing from address `0x0000-0000` (start of flash). There is no MBR (Master Boot Record), SoftDevice (Nordic's Bluetooth stack), or bootloader support. All the `*_uf2.dts*` files are not usable so far.
 
 The current configuration uses:
 - `CONFIG_BUILD_OUTPUT_UF2=n`
 - `CONFIG_BOOTLOADER_MCUBOOT=n`
 - `CONFIG_USE_DT_CODE_PARTITION=n`
 - `CONFIG_FLASH_LOAD_OFFSET=0`
+
++ **UF2 bootloader**: using the target heltec_t114_v2/nrf52840/uf2 will generate a binary ready to drag and drop using the prebuilt uf2 bootloader provided by the manufacturer.
 
 ## Flashing the boards
 
