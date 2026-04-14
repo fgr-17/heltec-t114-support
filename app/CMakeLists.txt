@@ -12,8 +12,6 @@ file(GLOB_RECURSE APP_C_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/boards/*.c
 )
 
-list(APPEND APP_C_SOURCES ${ZEPHYR_BASE}/boards/heltec/heltec_t114_v2/board_init.c)
-
 file(GLOB_RECURSE APP_H_SOURCES 
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
     ${CMAKE_CURRENT_SOURCE_DIR}/boards/*.h
